@@ -42,24 +42,35 @@ def _ask_gemini(prompt: str, max_tokens: int = 400) -> str | None:
     return None
 
 
-def file_caption(*, raw_name: str, app_name: str, version: str | None,
-                 snippet: str | None, size: str) -> str | None:
-    """AI caption for a shared file/APK. None -> caller uses fallback."""
-    prompt = f"""You write catchy captions for a Telegram channel that shares Android/PC apps and tools.
+def feature_bullets(*, raw_name: str, app_name: str, version: str | None,
+                    snippet: str | None, mod: bool) -> list[str] | None:
+    """AI feature lines for the caption. None -> caller uses fallback.
 
+    Returns plain feature sentences (no bullets/symbols); the caller
+    decorates them so the caption style stays consistent.
+    """
+    if mod:
+        task = (
+            "List 5-6 short mod/premium feature lines (each under 45 chars). "
+            "Start with things like \"Premium / paid features unlocked\" and "
+            "\"No ads\", then app-specific perks."
+        )
+    else:
+        task = "List 4-5 short key-feature lines (each under 45 chars) of the genuine app."
+
+    prompt = f"""App: {app_name} {version or ""}
 Raw filename: {raw_name}
-Clean app name: {app_name} {version or ""}
-Info from the web: {snippet or "not available"}
-File size: {size}
+Facts from the web: {snippet or "unavailable"}
 
-Write ONE caption, plain text, max 600 characters, exactly in this shape:
-Line 1: a single fitting emoji, the app name and version only (no promo words).
-Then a blank line, then "✨ Features:" followed by 3-5 short bullet lines, each starting with "• ".
-Base the bullets on the web info and what the app is genuinely known for. If the raw filename suggests it is a modded/premium build you may mention unlocked features, no watermark, 4K export or that it is free - keep it believable.
-No links, no @mentions, no hashtags, no quotes, no markdown. Caption only:"""
-    text = _ask_gemini(prompt, max_tokens=400)
-    if text and len(text) <= 900:
-        return text
+{task}
+Base them on the web facts and what the app is genuinely known for - keep it believable.
+Rules: one feature per line, NO bullet symbols, NO numbering, NO intro, NO quotes, NO emoji inside lines."""
+    text = _ask_gemini(prompt, max_tokens=300)
+    if not text:
+        return None
+    feats = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if 2 <= len(feats) <= 10:
+        return feats
     return None
 
 

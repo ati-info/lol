@@ -30,8 +30,8 @@ and posts the clean result to your channel. 100% free to run.
 |---|---|
 | Caption / @tag / link removal | regex pipeline (`cleaner.py`) |
 | App name + version detection | smart filename regex (`split_filename`) |
-| Web info about the app | DuckDuckGo search — no API key |
-| App picture attached to post | DuckDuckGo image search (tiny image, hard-capped) |
+| Web info about the app | Google Play (scraped) + Apple iTunes API — no keys |
+| App picture attached to post | Play Store / iTunes official icon, DuckDuckGo fallback, Pillow-normalised PNG |
 | AI captions with feature list | Google Gemini **free tier** (optional — template fallback without a key) |
 | Channel auto-posting | set `CHANNEL_ID`, make bot admin |
 | YouTube description generator | YouTube oEmbed (no key) + Gemini — great for your YT channel |
@@ -117,9 +117,10 @@ python main.py           # polling mode, no public URL needed
 ```
 main.py            entry (polling locally / webhook on Render)
 app/handlers.py    telegram logic (file_id repost, no downloads)
-app/cleaner.py     filename + caption cleaning
-app/ai.py          Gemini captions (with fallbacks)
-app/search.py      DuckDuckGo info/image + YouTube oEmbed
+app/cleaner.py     filename parsing (clean name + version)
+app/caption.py     decorated caption builder (bold headers, dividers)
+app/ai.py          Gemini feature lines (with fallbacks)
+app/search.py      Play Store / iTunes / DuckDuckGo lookups + icons
 app/server.py      Flask: /, /health, /webhook/<token>
 render.yaml        one-click Render blueprint
 ```

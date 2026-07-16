@@ -24,8 +24,15 @@ from telegram.ext import (
     filters,
 )
 
-from . import ai, cleaner, config, search
-from .utils import YOUTUBE_RE, clean_caption_text, human_size, trim
+from . import ai, caption as caption_builder, cleaner, config, search
+from .utils import (
+    YOUTUBE_RE,
+    clean_caption_text,
+    first_sentence,
+    human_size,
+    looks_modded,
+    trim,
+)
 
 log = logging.getLogger(__name__)
 
@@ -49,14 +56,14 @@ def _destination(update: Update):
     return update.effective_chat.id
 
 
-def _fallback_caption(name: str, version: str | None, size: str, snippet: str | None) -> str:
-    title = f"📱 {name} {version or ''}".strip()
-    lines = [title, ""]
-    if snippet:
-        lines += [f"ℹ️ {trim(snippet, 220)}", ""]
-    lines.append("🆓 Free Download")
-    lines.append(f"📦 Size: {size}")
-    return "\n".join(lines).strip()
+def _fallback_features(desc: str | None, mod: bool) -> list[str]:
+    feats = []
+    if desc:
+        feats.append(first_sentence(desc, 110))
+    if mod:
+        feats += ["Premium / paid features unlocked 🔓", "No ads 🚫"]
+    feats.append("Free to use 🆓")
+    return feats
 
 
 def _age() -> str:
@@ -148,22 +155,29 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status = await msg.reply_text("⏳ Processing…")
 
     try:
-        # -- 1. clean app name + version from the filename only --
-        name, version, _ = cleaner.split_filename(raw_name)
+        # -- 1. clean app name + version from the filename --
+        name, version, ext = cleaner.split_filename(raw_name)
+        mod = looks_modded(raw_name)
         query = f"{name} {version or ''}".strip()
 
-        # -- 2. web info + app picture (a few-KB image, capped - NOT the file) --
-        snippet = search.app_info(query)
-        icon_bytes = search.app_image_bytes(query)
+        # -- 2. web lookup: Play Store / iTunes / DuckDuckGo (all free) --
+        #    tiny app icon only - the Telegram file itself is never touched
+        info = search.lookup_app(query)
+        name = info.get("name") or name  # prefer the official store name
+        version = version or info.get("version")
+        icon_bytes = info.get("icon")
 
-        # -- 3. AI caption (Gemini free tier), template fallback without a key --
-        size_txt = human_size(fsize)
-        caption = ai.file_caption(
+        # -- 3. AI feature list (Gemini free tier), fallback without a key --
+        features = ai.feature_bullets(
             raw_name=raw_name, app_name=name, version=version,
-            snippet=snippet, size=size_txt,
-        ) or _fallback_caption(name, version, size_txt, snippet)
-        if config.CHANNEL_LINK and len(caption) < 880:
-            caption += f"\n\n🔗 {config.CHANNEL_LINK}"
+            snippet=info.get("desc"), mod=mod,
+        ) or _fallback_features(info.get("desc"), mod)
+
+        caption = caption_builder.build_caption(
+            name=name, version=version, features=features,
+            size=human_size(fsize), ext=ext, mod=mod,
+            link=config.CHANNEL_LINK or None,
+        )
 
         # -- 4. repost BY FILE_ID: no download, no upload, any file size --
         dest = _destination(update)

@@ -50,3 +50,40 @@ YOUTUBE_RE = re.compile(
     r"(https?://)?(www\.|m\.)?(youtube\.com/(watch\?v=|shorts/|live/)|youtu\.be/)[\w\-?=&%]+",
     re.I,
 )
+
+
+# ---------------------------------------------------------------- fancy text
+_BOLD = {}
+for _i, _ch in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
+    _BOLD[_ch] = chr(0x1D5D4 + _i)
+for _i, _ch in enumerate("abcdefghijklmnopqrstuvwxyz"):
+    _BOLD[_ch] = chr(0x1D5EE + _i)
+for _i, _ch in enumerate("0123456789"):
+    _BOLD[_ch] = chr(0x1D7EC + _i)
+
+
+def ubold(text: str) -> str:
+    """'Mod Info' -> '𝗠𝗼𝗱 𝗜𝗻𝗳𝗼' (unicode mathematical bold)."""
+    return "".join(_BOLD.get(c, c) for c in text)
+
+
+_MOD_RE = re.compile(
+    r"(mod|modded|premium|crack(ed)?|patched?|unlock(ed)?|vip|plus\+)", re.I
+)
+
+
+def looks_modded(filename: str) -> bool:
+    """True if the raw filename hints at a mod/premium build."""
+    return bool(_MOD_RE.search(filename or ""))
+
+
+def first_sentence(text: str, limit: int = 260) -> str:
+    """First sentence (or two, if very short) of a longer description."""
+    text = re.sub(r"\s+", " ", (text or "")).strip()
+    if not text:
+        return ""
+    parts = re.split(r"(?<=[.!?])\s+", text)
+    out = parts[0] if parts else text
+    if len(out) < 40 and len(parts) > 1:
+        out = out + " " + parts[1]
+    return trim(out, limit)
