@@ -34,8 +34,12 @@ def app_info(query: str) -> str | None:
     return None
 
 
-def app_image_bytes(query: str, max_bytes: int = 4 * 1024 * 1024) -> bytes | None:
-    """Download the app's icon/cover image from the web, or None."""
+def app_image_bytes(query: str, max_bytes: int = 2 * 1024 * 1024) -> bytes | None:
+    """Download the app's icon/cover image from the web, or None.
+
+    Only a tiny image (a few hundred KB tops) is fetched - never the
+    Telegram file itself - so RAM stays flat on the Render free plan.
+    """
     urls: list[str] = []
     try:
         with DDGS() as ddgs:
@@ -54,6 +58,10 @@ def app_image_bytes(query: str, max_bytes: int = 4 * 1024 * 1024) -> bytes | Non
             )
             ctype = resp.headers.get("Content-Type", "")
             if resp.status_code != 200 or not ctype.startswith("image"):
+                continue
+            # skip reading the body if the server says it's too big
+            declared = int(resp.headers.get("Content-Length") or 0)
+            if declared and declared > max_bytes:
                 continue
             data = resp.content
             if 1024 < len(data) <= max_bytes:

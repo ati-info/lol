@@ -6,10 +6,10 @@ the web for info, downloads the app's picture, writes a fresh **AI caption**
 and posts the clean result to your channel. 100% free to run.
 
 ```
- messy forward ──► bot ──► clean post
+ messy forward ──► bot ──► clean post in your channel
  ─────────────     │       ─────────────────────────────
- 📄 Capcut pro     │       🖼️ [app icon]
- 27.55v By         │       📄 CapCut_Pro_27.55.apk
+ 📄 Capcut pro     │       🖼️ [app icon from web]
+ 27.55v By         │       📄 <original file, untouched>
  @SomeoneMod.apk   │       📱 CapCut Pro 27.55
  #mod #apk         │       ✨ Features:
  💯 t.me/spam      │       • Save videos in 4K
@@ -19,18 +19,23 @@ and posts the clean result to your channel. 100% free to run.
                    │       📦 Size: 90 MB
 ```
 
+> 🚫 **No file is ever downloaded or re-uploaded.** Files are re-sent by
+> their Telegram `file_id` — zero disk, ~zero extra RAM. Runs fine on
+> Render's 512 MB free plan and works for APKs of **any size** (100 MB,
+> 1 GB, whatever).
+
 ## ✨ Features
 
 | Feature | How (free) |
 |---|---|
 | Caption / @tag / link removal | regex pipeline (`cleaner.py`) |
-| Real app name + version detection | filename regex + **read from inside the APK** (androguard) |
+| App name + version detection | smart filename regex (`split_filename`) |
 | Web info about the app | DuckDuckGo search — no API key |
-| App picture attached to post | DuckDuckGo image search, or the icon pulled out of the APK |
+| App picture attached to post | DuckDuckGo image search (tiny image, hard-capped) |
 | AI captions with feature list | Google Gemini **free tier** (optional — template fallback without a key) |
 | Channel auto-posting | set `CHANNEL_ID`, make bot admin |
 | YouTube description generator | YouTube oEmbed (no key) + Gemini — great for your YT channel |
-| Big file support | files > 20 MB are re-posted by `file_id` (no re-download needed) |
+| Any file size | re-sent by `file_id` — the file never touches the server |
 | "No internet" resilient | every web/AI call has a graceful fallback |
 | Works without bot restarts | `/health` endpoint for UptimeRobot |
 
@@ -78,10 +83,15 @@ pip install -r requirements.txt
 python main.py           # polling mode, no public URL needed
 ```
 
-## ⚠️ Limits (all free-plan limits, not code bugs)
+## ⚠️ How it handles files (and limits)
 
-- Official Bot API: download ≤ 20 MB (larger files are reposted by `file_id` — caption is cleaned, original filename kept), upload ≤ 50 MB.
-- Need 2 GB renames? Self-host a [Bot API server](https://core.telegram.org/bots/api#using-a-local-bot-api-server) and point PTB at it later.
+- The bot **never downloads Telegram files** — it re-sends the same `file_id`
+  with the caption replaced. Memory stays flat, no temp files, no crash risk
+  on Render's 512 MB free plan.
+- One Telegram rule worth knowing: when re-sending by `file_id`, the
+  **original filename stays** (Telegram only lets you change the filename
+  during a real re-upload). The caption is 100% fresh though — that's where
+  the clean name, version, features and info live.
 - Gemini free tier: ~15 req/min per model — fine for a channel bot.
 
 ## 💡 Extra free things you can add later
@@ -106,11 +116,10 @@ python main.py           # polling mode, no public URL needed
 
 ```
 main.py            entry (polling locally / webhook on Render)
-app/handlers.py    telegram logic
+app/handlers.py    telegram logic (file_id repost, no downloads)
 app/cleaner.py     filename + caption cleaning
 app/ai.py          Gemini captions (with fallbacks)
 app/search.py      DuckDuckGo info/image + YouTube oEmbed
-app/apk.py         read name/version/icon from APK (androguard)
 app/server.py      Flask: /, /health, /webhook/<token>
 render.yaml        one-click Render blueprint
 ```

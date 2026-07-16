@@ -49,9 +49,5 @@ ADMIN_IDS = {
 WEBHOOK_URL: str = (os.getenv("WEBHOOK_URL") or os.getenv("RENDER_EXTERNAL_URL") or "").rstrip("/")
 PORT: int = int(os.getenv("PORT", "8080"))
 
-# Official Bot API limits downloads via getFile to 20 MB.
-# We keep a safety margin for the download/rename/upload path.
-MAX_RENAME_BYTES: int = 19 * 1024 * 1024
-
 # Bot display name used in messages.
 BOT_NAME: str = os.getenv("BOT_NAME", "FileCraft AI")

@@ -1,13 +1,17 @@
-"""Telegram handlers - the heart of the bot."""
+"""Telegram handlers - the heart of the bot.
+
+IMPORTANT: no Telegram file is ever downloaded or re-uploaded.
+Files are re-sent by their `file_id` (they stay on Telegram's servers),
+we only replace the caption. Zero disk usage, tiny RAM footprint -
+runs happily on Render's 512 MB free plan.
+"""
 import logging
 import os
-import tempfile
 import time
 
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    InputFile,
     InputMediaDocument,
     InputMediaPhoto,
     Update,
@@ -20,7 +24,7 @@ from telegram.ext import (
     filters,
 )
 
-from . import ai, apk, cleaner, config, search
+from . import ai, cleaner, config, search
 from .utils import YOUTUBE_RE, clean_caption_text, human_size, trim
 
 log = logging.getLogger(__name__)
@@ -69,9 +73,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Forward ⏩ any file / APK / video / photo to me.\n\n"
         "I will:\n"
         "1️⃣ Remove the old caption, @tags & links\n"
-        "2️⃣ Read the real app name + version\n"
+        "2️⃣ Pick the clean app name + version\n"
         "3️⃣ Search the web for info about it\n"
-        "4️⃣ Generate a fresh AI caption with features\n"
+        "4️⃣ Add a fresh AI caption with features\n"
         "5️⃣ Attach the app's picture and post it 🗃️\n\n"
         "📹 Send a YouTube link and I'll draft a description too.\n"
         "Type /help for details."
@@ -82,9 +86,10 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📖 *How it works*\n\n"
-        "• Forward a file ➜ I repost it cleaned + AI caption + app icon.\n"
+        "• Forward a file ➜ I repost it (no download!) with a new "
+        "AI caption + app icon. Old caption/tags are gone.\n"
         "• Forward a photo ➜ tags/links removed from caption.\n"
-        "• Send a YouTube link ➜ ready-made title/description/hashtags.\n\n"
+        "• Send a YouTube link ➜ ready-made description + hashtags.\n\n"
         "Commands:\n"
         "/start – welcome\n"
         "/ping – check if I'm alive\n"
@@ -119,15 +124,14 @@ async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ------------------------------------------------------------------ files
 def _file_parts(msg):
-    """Return (telegram_file_obj, filename, size, mime, ext) for docs/video/audio."""
+    """Return (telegram_file_obj, filename, size, ext) for docs/video/audio."""
     obj = msg.document or msg.video or msg.audio
     if not obj:
         return None
     fname = getattr(obj, "file_name", None) or f"file_{obj.file_unique_id}"
-    mime = getattr(obj, "mime_type", "") or ""
     if not getattr(obj, "file_name", None) and msg.video:
         fname += ".mp4"
-    return obj, fname, getattr(obj, "file_size", 0), mime, os.path.splitext(fname)[1].lower()
+    return obj, fname, getattr(obj, "file_size", 0), os.path.splitext(fname)[1].lower()
 
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -135,52 +139,24 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parts = _file_parts(msg)
     if not parts:
         return
-    tg_file_obj, raw_name, fsize, mime, ext = parts
+    tg_file_obj, raw_name, fsize, _ext = parts
     _STATS["files"] += 1
 
     is_channel_post = msg.chat.type == "channel"
     status = None
     if not is_channel_post:
-        status = await msg.reply_text("⏳ Processing your file…")
+        status = await msg.reply_text("⏳ Processing…")
 
-    local_path = None
-    tmpdir = tempfile.mkdtemp(prefix="fc_")
     try:
+        # -- 1. clean app name + version from the filename only --
         name, version, _ = cleaner.split_filename(raw_name)
-        icon_bytes = None
-
-        # -- 1. small APKs: download once, read REAL name/version/icon --
-        if ext == ".apk" and fsize and fsize <= config.MAX_RENAME_BYTES:
-            try:
-                local_path = os.path.join(tmpdir, raw_name)
-                tg_file = await tg_file_obj.get_file()
-                await tg_file.download_to_drive(local_path)
-                meta = apk.parse_apk(local_path)
-                if meta:
-                    name = meta.get("label") or name
-                    version = meta.get("version") or version
-                    icon_bytes = meta.get("icon_bytes")
-            except Exception as exc:
-                log.warning("apk download/parse failed: %s", exc)
-                local_path = None
-        elif fsize and fsize <= config.MAX_RENAME_BYTES:
-            # non-apk but renameable: download so we can re-upload with clean name
-            try:
-                local_path = os.path.join(tmpdir, raw_name)
-                tg_file = await tg_file_obj.get_file()
-                await tg_file.download_to_drive(local_path)
-            except Exception as exc:
-                log.warning("download failed: %s", exc)
-                local_path = None
-
         query = f"{name} {version or ''}".strip()
 
-        # -- 2. web info + picture (free DuckDuckGo, no keys) --
+        # -- 2. web info + app picture (a few-KB image, capped - NOT the file) --
         snippet = search.app_info(query)
-        if icon_bytes is None:
-            icon_bytes = search.app_image_bytes(query)
+        icon_bytes = search.app_image_bytes(query)
 
-        # -- 3. AI caption (Gemini free tier), fallback to template --
+        # -- 3. AI caption (Gemini free tier), template fallback without a key --
         size_txt = human_size(fsize)
         caption = ai.file_caption(
             raw_name=raw_name, app_name=name, version=version,
@@ -189,42 +165,30 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if config.CHANNEL_LINK and len(caption) < 880:
             caption += f"\n\n🔗 {config.CHANNEL_LINK}"
 
-        # -- 4. deliver --
+        # -- 4. repost BY FILE_ID: no download, no upload, any file size --
         dest = _destination(update)
-        if local_path:  # re-upload with the CLEAN filename
-            new_fname = cleaner.safe_filename(name, version, ext)
-            file_payload = InputFile(open(local_path, "rb"), filename=new_fname)
-        else:  # too big to re-download: reuse Telegram's copy via file_id
-            file_payload = tg_file_obj.file_id
-
         if icon_bytes:
             media = [
                 InputMediaPhoto(media=icon_bytes, caption=trim(caption, 1024)),
-                InputMediaDocument(media=file_payload),
+                InputMediaDocument(media=tg_file_obj.file_id),
             ]
             await context.bot.send_media_group(chat_id=dest, media=media)
         else:
             await context.bot.send_document(
                 chat_id=dest,
-                document=file_payload,
+                document=tg_file_obj.file_id,
                 caption=trim(caption, 1024),
                 reply_markup=_channel_button(),
             )
 
         if status:
             await status.edit_text(
-                "✅ Posted!" if config.CHANNEL_ID else "✅ Done — cleaned & regenerated!"
+                "✅ Posted to channel!" if config.CHANNEL_ID else "✅ Done — caption replaced!"
             )
     except Exception as exc:
         log.exception("file handling failed")
         if status:
             await status.edit_text(f"⚠️ Failed: {type(exc).__name__}. Try again.")
-    finally:
-        try:
-            import shutil
-            shutil.rmtree(tmpdir, ignore_errors=True)
-        except Exception:
-            pass
 
 
 # ------------------------------------------------------------------ photos
