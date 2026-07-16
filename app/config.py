@@ -26,7 +26,7 @@ GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODELS = [
     m.strip()
     for m in os.getenv(
-        "GEMINI_MODELS", "gemini-2.0-flash-lite,gemini-2.0-flash,gemini-1.5-flash"
+        "GEMINI_MODELS", "gemini-2.5-flash-lite,gemini-2.0-flash-lite,gemini-2.0-flash"
     ).split(",")
     if m.strip()
 ]

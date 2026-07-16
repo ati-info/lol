@@ -12,8 +12,6 @@ import time
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    InputMediaDocument,
-    InputMediaPhoto,
     Update,
 )
 from telegram.ext import (
@@ -180,13 +178,29 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         # -- 4. repost BY FILE_ID: no download, no upload, any file size --
+        #    Telegram rule: photo + document CANNOT share one album, so the
+        #    (photo + caption) and the file go as two separate messages.
         dest = _destination(update)
+        photo_posted = False
         if icon_bytes:
-            media = [
-                InputMediaPhoto(media=icon_bytes, caption=trim(caption, 1024)),
-                InputMediaDocument(media=tg_file_obj.file_id),
-            ]
-            await context.bot.send_media_group(chat_id=dest, media=media)
+            try:
+                await context.bot.send_photo(
+                    chat_id=dest,
+                    photo=icon_bytes,
+                    caption=trim(caption, 1024),
+                    reply_markup=_channel_button(),
+                )
+                photo_posted = True
+            except Exception as exc:
+                log.warning("photo post failed (%s) -> doc-only fallback", exc)
+
+        if photo_posted:
+            mini_title = f"{name}{' v' + version if version else ''}"
+            await context.bot.send_document(
+                chat_id=dest,
+                document=tg_file_obj.file_id,
+                caption=f"📥 {trim(mini_title, 200)}  •  {human_size(fsize)}",
+            )
         else:
             await context.bot.send_document(
                 chat_id=dest,
