@@ -127,6 +127,19 @@ async def cmd_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def cmd_login(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    # Check if authorized admin
+    if config.ADMIN_IDS and user_id not in config.ADMIN_IDS:
+        await update.message.reply_text("❌ You are not authorized to use this command.")
+        return
+        
+    from .userbot import init_login_session
+    response = await init_login_session(update.effective_chat.id, user_id)
+    await update.message.reply_text(response, parse_mode="Markdown")
+
+
 # ------------------------------------------------------------------ files
 def _file_parts(msg):
     """Return (telegram_file_obj, filename, size, ext) for docs/video/audio."""
@@ -241,6 +254,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.effective_message
     text = msg.text or ""
+    user_id = update.effective_user.id
+
+    # 1. Check if user is in ACTIVE_LOGINS session (Userbot config)
+    from .userbot import ACTIVE_LOGINS, handle_login_input
+    if user_id in ACTIVE_LOGINS:
+        response = await handle_login_input(user_id, text)
+        if response:
+            await msg.reply_text(response, parse_mode="Markdown")
+        return
+
     yt = YOUTUBE_RE.search(text)
     if not yt:
         await msg.reply_text(
@@ -276,6 +299,7 @@ def register(app: Application) -> None:
     app.add_handler(CommandHandler("ping", cmd_ping))
     app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CommandHandler("id", cmd_id))
+    app.add_handler(CommandHandler("login", cmd_login))
     app.add_handler(
         MessageHandler(filters.Document.ALL | filters.VIDEO | filters.AUDIO, handle_file)
     )
