@@ -114,8 +114,15 @@ async def run_check_cycle(client):
             current_id += 1
             continue
 
-        if msg.file:
-            log.info("Userbot: Found file in message ID %s! Forwarding to %s...", current_id, destination)
+        # Check if the message contains only genuine files/APKs (excluding images, videos, audio, gif, text)
+        is_genuine_file = False
+        if msg.document and not msg.video and not msg.photo and not msg.audio and not msg.gif:
+            mime = msg.document.mime_type or ""
+            if not mime.startswith("image/") and not mime.startswith("video/") and not mime.startswith("audio/"):
+                is_genuine_file = True
+
+        if is_genuine_file:
+            log.info("Userbot: Found genuine file (Document/APK) in message ID %s! Forwarding to %s...", current_id, destination)
             try:
                 await client.forward_messages(destination_entity, msg)
                 log.info("Userbot: Successfully forwarded message ID %s.", current_id)
@@ -129,7 +136,7 @@ async def run_check_cycle(client):
                 save_state(state)
                 break
         else:
-            # Non-file message (like plain text), record progress and skip
+            # Non-file message (like plain text, image, video, gif), record progress and skip
             state["last_checked_id"] = current_id
             save_state(state)
             current_id += 1

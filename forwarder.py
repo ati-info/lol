@@ -124,9 +124,15 @@ async def check_and_forward(client, config):
             current_id += 1
             continue
 
-        # Check if message contains a file/media
-        if msg.file:
-            print(f"\n[+] Found a file in message ID {current_id}! Forwarding to {destination}...")
+        # Check if the message contains only genuine files/APKs (excluding images, videos, audio, gif, text)
+        is_genuine_file = False
+        if msg.document and not msg.video and not msg.photo and not msg.audio and not msg.gif:
+            mime = msg.document.mime_type or ""
+            if not mime.startswith("image/") and not mime.startswith("video/") and not mime.startswith("audio/"):
+                is_genuine_file = True
+
+        if is_genuine_file:
+            print(f"\n[+] Found genuine file (Document/APK) in message ID {current_id}! Forwarding to {destination}...")
             try:
                 # Forward the message
                 await client.forward_messages(destination_entity, msg)
@@ -144,7 +150,7 @@ async def check_and_forward(client, config):
                 save_config(config)
                 break
         else:
-            # No file found (e.g., text post), update config and move to next
+            # No genuine file found (e.g., text, photo, video post), update config and move to next
             config['last_checked_id'] = current_id
             save_config(config)
             current_id += 1
