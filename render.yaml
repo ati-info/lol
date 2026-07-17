@@ -1,0 +1,21 @@
+# One-click Render blueprint (free plan)
+services:
+  - type: web
+    name: ai-file-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: BOT_TOKEN
+        sync: false # set in Render dashboard (from @BotFather)
+      - key: GEMINI_API_KEY
+        sync: false # optional, free key from aistudio.google.com/apikey
+      - key: CHANNEL_ID
+        sync: false # optional: @channelusername or -100xxxxxxxxxx
+      - key: CHANNEL_LINK
+        sync: false # optional: https://t.me/yourchannel

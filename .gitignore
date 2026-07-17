@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+*.log
+.DS_Store
+*.session
+*.session-journal
+userbot_state.json
