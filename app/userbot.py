@@ -165,10 +165,19 @@ async def _userbot_loop_runner():
     from telethon.sessions import StringSession
 
     log.info("Userbot: Initializing personal account userbot...")
-    if config.USERBOT_SESSION_STRING:
-        log.info("Userbot: Using String Session from environment variables...")
-        client = TelegramClient(StringSession(config.USERBOT_SESSION_STRING), config.USERBOT_API_ID, config.USERBOT_API_HASH)
-    else:
+    client = None
+    
+    session_str = config.USERBOT_SESSION_STRING.strip() if config.USERBOT_SESSION_STRING else ""
+    if session_str and len(session_str) > 10:
+        try:
+            from telethon.sessions import StringSession
+            client = TelegramClient(StringSession(session_str), config.USERBOT_API_ID, config.USERBOT_API_HASH)
+            log.info("Userbot: Successfully initialized String Session from environment variables.")
+        except ValueError as e:
+            log.warning("Userbot: USERBOT_SESSION_STRING in environment is invalid (%s). Falling back to file session.", e)
+            client = None
+
+    if not client:
         log.info("Userbot: Using file-based SQLite session (%s.session)...", SESSION_NAME)
         client = TelegramClient(SESSION_NAME, config.USERBOT_API_ID, config.USERBOT_API_HASH)
     
