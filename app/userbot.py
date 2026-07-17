@@ -139,8 +139,15 @@ async def start_userbot_loop():
         log.info("Userbot: USERBOT_API_ID or USERBOT_API_HASH is not set. Userbot feature disabled.")
         return
 
+    from telethon.sessions import StringSession
+
     log.info("Userbot: Initializing personal account userbot...")
-    client = TelegramClient(SESSION_NAME, config.USERBOT_API_ID, config.USERBOT_API_HASH)
+    if config.USERBOT_SESSION_STRING:
+        log.info("Userbot: Using String Session from environment variables...")
+        client = TelegramClient(StringSession(config.USERBOT_SESSION_STRING), config.USERBOT_API_ID, config.USERBOT_API_HASH)
+    else:
+        log.info("Userbot: Using file-based SQLite session (%s.session)...", SESSION_NAME)
+        client = TelegramClient(SESSION_NAME, config.USERBOT_API_ID, config.USERBOT_API_HASH)
     
     try:
         await client.connect()

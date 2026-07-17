@@ -4,7 +4,6 @@ import asyncio
 from telethon import TelegramClient
 
 ENV_FILE = ".env"
-SESSION_NAME = "user_session"
 STATE_FILE = "userbot_state.json"
 
 def clear_screen():
@@ -16,9 +15,9 @@ def print_banner():
            USERBOT INTERACTIVE LOGIN & SETUP
 ============================================================
 * This script will help you log into your personal account
-  and create the 'user_session.session' file safely.
-* Once logged in, you can deploy/run your main bot and the
-  userbot will run smoothly in the background.
+  and generate a highly portable 'USERBOT_SESSION_STRING'.
+* This session string is perfect for hosting on Render free
+  plan, as it doesn't get deleted when Render restarts!
 ============================================================
 """
     print(banner)
@@ -160,23 +159,38 @@ async def main():
         json.dump(state, f, indent=4)
     print("[✓] Initial state saved to userbot_state.json!")
     
-    # 4. Authenticate using Telethon client
+    # 4. Authenticate using Telethon client with StringSession
     print("\n[+] Starting Telethon Client. Please watch the terminal for OTP code/2FA Password prompts.")
     api_id = int(env["USERBOT_API_ID"])
     api_hash = env["USERBOT_API_HASH"]
     phone_number = env["USERBOT_PHONE"]
     
-    client = TelegramClient(SESSION_NAME, api_id, api_hash)
+    from telethon.sessions import StringSession
+    
+    # Use StringSession so we get a single, portable string that works on Render free tier!
+    client = TelegramClient(StringSession(), api_id, api_hash)
     
     try:
         await client.start(phone=phone_number)
         print("\n[✓] CONGRATULATIONS! LOGIN SUCCESSFUL!")
         me = await client.get_me()
         print(f"Logged in as: {me.first_name} (@{me.username or 'No Username'})")
+        
+        # Save session string
+        session_str = client.session.save()
+        env["USERBOT_SESSION_STRING"] = session_str
+        save_env(env)
+        
+        print("\n=============================================================")
+        print("⚡ YOUR STRING SESSION GENERATED SUCCESSFULLY!")
+        print("=============================================================")
+        print(f"\n{session_str}\n")
+        print("=============================================================")
         print("\nWhat this means:")
-        print("1. Your session is now saved in 'user_session.session'.")
-        print("2. When you start the main bot using 'python main.py', the userbot will run in the background seamlessly!")
-        print("3. No future log-ins or OTP inputs will be required unless you delete 'user_session.session'.")
+        print("1. The session string has been automatically saved in your '.env' file as 'USERBOT_SESSION_STRING'.")
+        print("2. When hosting on Render, copy the entire string above and set it as an Environment Variable named 'USERBOT_SESSION_STRING'.")
+        print("3. This allows you to host the bot on Render Free tier without committing any '.session' files to Git! (Render restarts won't log you out)")
+        print("4. When you run 'python main.py', the userbot will run in the background seamlessly!")
         
     except Exception as e:
         print(f"\n[-] Authentication or connection failed: {e}")

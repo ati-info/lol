@@ -60,4 +60,5 @@ USERBOT_TARGET_CHANNEL: str = os.getenv("USERBOT_TARGET_CHANNEL", "").strip()
 USERBOT_DESTINATION: str = os.getenv("USERBOT_DESTINATION", "").strip()
 USERBOT_LAST_CHECKED_ID: int = int(os.getenv("USERBOT_LAST_CHECKED_ID", "0").strip() or 0)
 USERBOT_CHECK_INTERVAL_SECONDS: int = int(os.getenv("USERBOT_CHECK_INTERVAL_SECONDS", "300").strip() or 300)
+USERBOT_SESSION_STRING: str = os.getenv("USERBOT_SESSION_STRING", "").strip()
 
