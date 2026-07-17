@@ -301,7 +301,10 @@ def register(app: Application) -> None:
     app.add_handler(CommandHandler("id", cmd_id))
     app.add_handler(CommandHandler("login", cmd_login))
     app.add_handler(
-        MessageHandler(filters.Document.ALL | filters.VIDEO | filters.AUDIO, handle_file)
+        MessageHandler(
+            (filters.Document.ALL | filters.VIDEO | filters.AUDIO) & ~filters.ChatType.CHANNEL,
+            handle_file
+        )
     )
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.PHOTO & ~filters.ChatType.CHANNEL, handle_photo))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.ChatType.CHANNEL, handle_text))
